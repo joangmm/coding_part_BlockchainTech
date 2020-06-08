@@ -1,0 +1,125 @@
+pragma solidity 0.5.16; 
+
+/*
+GROUP MEMBERS
+Joan García
+Alex Pujol
+Marcel de Cabanyes
+Gerard Opazo
+Joel Panchamé
+Umar Muhammad
+*/
+
+/*
+PROJECT SUMMARY
+We thought of implementing the Proof of Concept of our project in the following way:
+Given that the main objective of the project is to increment the Artificial Intelligence of your Voice Assistant, we thought of having two contracts:
+The first one would be the master, which corresponds to the central institution that would manage all the projects.
+The second contract would be the contract for every customer. Each customer should deliver, at least, 5 of the recordings (that will actually be commands to the Voice Assistant) in order to get the premium feature. The premium feature will consist of getting the whole database of all the recordings that the other customers may have uploaded. In this way, the customers that update 5 or more of their recordings will have the whole database in order to increment the AI of their Voice Assistant.
+You can only train your AI after 1/6/2020 because before than that date the database is being updated.  
+PD: we will use strings and not actually recordings to make things easier, but this could be implemented also with recordings of sentences.
+*/
+
+/*
+INSTRUCTIONS:
+1. Deploy VoicerToken
+2. Deploy MyContract, where:
+_WALLET: is the account address
+_TOKEN: is the memory address of the VoicerToken cotnract
+_USERID: userID (for example, "0000")
+3. Create recordings by setting the language and the string in exchange of tokens (BuyV function)
+4. Once you have 5 tokens (repeating the previous step), you can execute the function trainMyAI
+    4.1 You can check how many tokens you have obtained in the balances variable setting you account address
+    4.2 You can check all the recordings stored in the VoicerToken with the variable Registry 
+    4.3 You can check the number of recordings through the registrySize variable
+5. Check that in myRegistry you have hole database (all the entries for all the possible MyContracts that have submitted some entry by BuyV function)
+6. You can create as many customers as you want with MyContracts and follow the same process, retrieving the whole database
+*/
+
+
+//The VoicerToken contract stores all the recordings and sells tokens in exchange of records. Once a user have 5 tokens, the contract
+//sells its database.
+contract VoicerToken { 
+
+    string public symbol = "V";
+    string public name = "Voicer"; 
+    mapping(address => uint256) public balances; //stores number of tokens by account
+    uint256 internal counter; 
+    uint256 internal startTime = 0;
+    uint256 public registrySize;
+    struct  Recording  { 
+        string _language;
+        string _recording;
+    }
+    
+    Recording[] public Registry; //database of voice recordings
+
+    /* CONSTRUCTORS */
+    constructor() public{
+        startTime = 1590969600; // 01/06/2020 -> 1590969600
+    }
+    
+    modifier accesTime(){ 
+        require(block.timestamp >= startTime); //starting date
+        _;
+    }
+    
+    //Exchanges one recording for one token
+    function buyVoicer(string memory language, string memory recording) public{ 
+        balances[tx.origin] += 1;
+        Registry.push(Recording(language, recording));
+        registrySize = registrySize + 1;
+    }
+    
+    //If the user have 5 tokens (and the current date is after the accessTime), the VoicerToken transfers the whole database of recordings to the user
+    function trainAI() public payable  accesTime {
+        if( balances[tx.origin] >= 5){
+            balances[tx.origin] = balances[tx.origin] - 5;
+            MyContract _token = MyContract(address(msg.sender));
+            counter = 0;
+            while (counter < registrySize){ //The transfer is one recording by one
+                 _token.transRegistry(Registry[counter]._language, Registry[counter]._recording);
+                 counter++;
+            }
+        }
+    }
+    
+} 
+
+//The MyContract contract allows the user to play the role of customer, buying tokens and exchanging them for the whole database
+contract MyContract {
+    
+    address public token; 
+    address payable wallet;
+    string public UserID;
+    struct  Recording  {
+        string _language;
+        string _recording;
+    }
+
+    Recording[] public myRegistry; //User database of recordings
+
+    constructor(address payable _wallet, address _token, string memory _UserID) public {
+        wallet = _wallet;
+        token = _token;
+        UserID = _UserID;
+    }
+    
+    //Buy one token in exchange of one recording
+    function buyV(string memory _language, string memory _recording) public payable { 
+      VoicerToken _token = VoicerToken(address(token)); 
+      _token.buyVoicer(_language,_recording); 
+      wallet.transfer(msg.value); 
+    }
+    
+    //Loads the whole VoicerToken database in exchange of 5 tokens
+    function trainMyAI() public {
+      VoicerToken _token = VoicerToken(address(token)); 
+      _token.trainAI();    }
+    
+    //Recieves the recordings from the VoicerToken contract databse
+    function transRegistry(string memory _language, string memory _recording) public {
+        myRegistry.push(Recording(_language, _recording));
+    }
+    
+}
